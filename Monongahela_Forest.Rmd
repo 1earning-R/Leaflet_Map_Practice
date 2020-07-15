@@ -1,0 +1,184 @@
+---
+title: "Practice Leaflet Map: Where's Whiskers?"
+author: "Eric Smith"
+date: "7/15/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### An Interactive Exploration of Fauna in the West Virginia Highlands
+
+The <a href = 'https://www.fs.usda.gov/main/mnf/home'>Monongahela National Forest</a> in West Virginia contains unique ecological diversity. 
+In this document, the *leaflet* R library is used to create an interactive hide-and-seek map game that encourages users to virtually explore and learn about the fauna of the West Virginia highlands.
+
+To make this simple game, the clustering feature in *leaflet*'s *addMarkers()* function is used to force users to zoom in and out of map features in search of their imagined lost cat, Whiskers. 
+Along the way, they will uncover other animals that live in the Forest.
+These critters are randomly populated using *runif()* and are displayed using *leaflet*'s *icons()* function.
+The images were produced (poorly) by the author in MS Paint.
+Many of the *popup* texts include hyperlinks to websites where the reader can learn more about the Monongahela region.
+
+### The Code
+
+```{r Load Packages, echo=FALSE, warning=FALSE}
+library(leaflet)
+```
+
+A reference data frame is defined.
+
+This data contains:
+
+- a reference group number
+- the number of repeated instances of the animal
+- a logical variable indicating whether the animal should be randomly placed on the map
+- the file path for the animal's icon
+- the pop-up text to display for the animal
+- optional latitude and longitude if the animal will not be randomly populated
+
+The code below shows the setup of this data frame and the first entry as an example.
+
+```{r Define Animal Data Frame}
+## Create a data frame for the different 'species' of animal
+
+## Number of 'species'
+n_group <- 10
+## Latitude/ Longitude ranges
+LAT_rng <- c(38.44, 39.1)
+LNG_rng <- c(-80.1,-79.376)
+## Define empty data frame
+ref <- data.frame(group = rep(NA,n_group),
+                  Num = rep(NA,n_group),
+                  Rand = rep(FALSE, n_group),
+                  IMG_url = rep("", n_group),
+                  POP_txt = rep("",n_group),
+                  latitude = rep(NA, n_group),
+                  longitude = rep(NA, n_group))
+## Fill by row
+ref[1,] <- list(1,
+                30, 
+                TRUE, 
+                "images/transparent_raccoon.png",
+                "This is just a raccoon.",
+                NA, NA)
+```
+```{r echo=FALSE}
+ref[2,] <- list(2,
+                7, 
+                TRUE,
+                "images/transparent_squirrel.png",
+                "This is a <a href = 'http://en.wikipedia.org/wiki/Northern_flying_squirrel'> flying squirrel</a>, specifically <i> Glaucomys sabrinus fuscus</i>.",
+                NA, NA)
+
+ref[3,] <- list(3,
+                4,
+                TRUE,
+                "images/transparent_eagle.png",
+                "Look! A bald eagle!",
+                NA, NA)
+
+ref[4,] <- list(4,
+                25,
+                TRUE,
+                "images/transparent_deer.png",
+                "Oh dear. It's a deer.",
+                NA, NA)
+
+ref[5,] <- list(5,
+                5,
+                TRUE,
+                "images/transparent_bear.png",
+                "Watch out! It's a <a href = 'http://www.nps.gov/subjects/bears/safety.htm#Do'>bear</a>!",
+                NA, NA)
+
+ref[6,] <- list(6,
+                7,
+                TRUE,
+                "images/transparent_woodcock.png",
+                "You found a woodcock! What's a <a href = 'https://en.wikipedia.org/wiki/Woodcock'>woodcock</a>?",
+                NA, NA)
+
+ref[7,] <- list(7,
+                3,
+                TRUE,
+                "images/transparent_snail.png",
+                "This is a <a href ='https://www.fws.gov/northeast/pdf/Flatspired.pdf'>flat-spired three-toothed snail</a>, protected under the Endangered Species Act.",
+                NA, NA)
+
+ref[8,] <- list(8,
+                1,
+                FALSE,
+                "images/transparent_cat.png",
+                "You found Whiskers! He was in the <a href = 'http://en.wikipedia.org/wiki/Sinks_of_Gandy'>Sinks of Gandy</a>.",
+                38.715,-79.643)
+
+ref[9,] <- list(9,
+                1,
+                FALSE,
+                "images/transparent_salamander.png",
+                "WHOA! You found a <a href = 'http://en.wikipedia.org/wiki/Cheat_Mountain_salamander'>Cheat Mountain salamander</a>.",
+                38.44,-79.984)
+
+ref[10,] <- list(10,
+                 1,
+                 FALSE,
+                 "images/transparent_falcon.png",
+                 "A peregrine falcon! Maybe its nest is on <a href = 'https://en.wikipedia.org/wiki/Seneca_Rocks'>Seneca Rocks</a>.",
+                 38.835, -79.376)
+```
+
+Using the information from this reference data frame, a larger data frame is produced that can be used as input for mapping with the *leaflet* package.
+This larger data frame contains randomly produced locations for many of the animals.
+
+```{r Expand Data for Mapping}
+## The reference data frame above must be expanded to include repeated
+## animals and randomly populated locations
+
+## Randomly place animals
+set.seed(25)
+N_rand <- sum(ref$Num[ref$Rand])
+df <- data.frame(group = rep(NA, N_rand),
+                 latitude = runif(N_rand, LAT_rng[1], LAT_rng[2]),
+                 longitude = runif(N_rand, LNG_rng[1], LNG_rng[2]))
+
+## Add animals with specified coordinates
+df <- rbind(df, ref[!(ref$Rand),c("group","latitude","longitude")])
+
+## Assign group numbers
+df$group <- do.call(c, sapply(1:n_group,
+                              function(n) rep(ref$group[n],ref$Num[n])))
+## Assign popup text
+popups <- do.call(c, sapply(1:n_group,
+                            function(n) rep(ref$POP_txt[n], ref$Num[n])))
+```
+
+Finally, *leaflet* is used to create an interactive map with 
+
+```{r Use Leaflet to Map Data, message=FALSE}
+my_map <- df %>% leaflet(width = 910, height = 562) %>%
+      addTiles() %>%
+      addMarkers(icon = ~ icons(iconUrl = ref$IMG_url[group]),
+                 popup = popups,
+                 clusterOptions = markerClusterOptions()) %>%
+      addRectangles(lng1 = LNG_rng[1] - .1, lat1 = LAT_rng[1] - .1, 
+                    lng2 = LNG_rng[2] + .1, lat2 = LAT_rng[2] + .1,
+                    fill = FALSE,
+                    color = "forestgreen",
+                    weight = 4)
+
+
+```
+
+## The Game
+
+Oh no! Your pet cat, Whiskers, has run off into the woods!
+Use the map to find your cat.
+
+*Click and drag to move. To zoom use the buttons in the top left corner or use your mouse's scroll wheel.*
+*Clicking on the green and orange clusters will automatically zoom in to see what's there.*
+
+```{r, echo=FALSE}
+my_map
+```
